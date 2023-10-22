@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from types import FrameType
 from typing import Optional
+import time
 
 from colorama import Fore, Style
 from pydantic import SecretStr
@@ -40,6 +41,9 @@ from autogpt.models.command_registry import CommandRegistry
 from autogpt.plugins import scan_plugins
 from autogpt.workspace import Workspace
 from scripts.install_plugin_deps import install_plugin_dependencies
+
+
+
 
 
 @coroutine
@@ -201,6 +205,31 @@ async def run_auto_gpt(
     )
 
     await run_interaction_loop(agent)
+
+
+class TokenBucketRateLimiter:
+    def __init__(self, rate: float, capacity: int):
+        self.rate = rate
+        self.capacity = capacity
+        self.tokens = capacity
+        self.last_refill_time = time.time()
+
+    def refill_tokens(self):
+        now = time.time()
+        time_elapsed = now - self.last_refill_time
+        tokens_to_add = time_elapsed * self.rate
+        self.tokens = min(self.capacity, self.tokens + tokens_to_add)
+        self.last_refill_time = now
+
+    def allow_request(self):
+        self.refill_tokens()
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True
+        return False
+
+
+
 
 
 def _configure_openai_provider(config: Config) -> OpenAIProvider:
@@ -438,6 +467,9 @@ def update_user(
             "preserve_color": True,
         },
     )
+
+
+
 
 
 async def get_user_feedback(
